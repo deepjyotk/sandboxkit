@@ -1,0 +1,295 @@
+:root {
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  color: #0f172a;
+  background: #f1f5f9;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+#app {
+  padding: 1rem 1.25rem 2rem;
+  max-width: 100%;
+}
+
+header {
+  margin-bottom: 1rem;
+}
+
+header h1 {
+  margin: 0 0 0.25rem;
+  font-size: 1.35rem;
+}
+
+header p {
+  margin: 0;
+  color: #475569;
+  font-size: 0.9rem;
+}
+
+.status-bar {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.status-bar .ok {
+  color: #15803d;
+}
+
+.status-bar .bad {
+  color: #b91c1c;
+}
+
+#grid {
+  height: calc(100vh - 7rem);
+  width: 100%;
+}
+
+.ag-theme-quartz {
+  --ag-font-size: 13px;
+}
+
+.cell-chrome {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: 100%;
+  min-height: 100%;
+  padding: 0.2rem 0;
+}
+
+.cell-chrome-toolbar {
+  display: flex;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.cell-icon-btn {
+  padding: 0.15rem 0.45rem;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #fff;
+  color: #475569;
+  line-height: 1.3;
+}
+
+.cell-icon-btn:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.cell-clear-btn {
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.cell-clear-btn:hover {
+  background: #fef2f2;
+  border-color: #f87171;
+}
+
+.cell-chrome-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.cell-chrome-body .cell-plain-text {
+  display: block;
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.cell-badge-wrap {
+  padding: 0.15rem 0;
+}
+
+.cell-actions-wrap {
+  min-width: 0;
+}
+
+.cell-chrome-body.cell-code pre {
+  margin: 0;
+  padding: 0.5rem;
+  background: #1e293b;
+  color: #e2e8f0;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  max-height: 140px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.cell-chrome-body.cell-json pre {
+  margin: 0;
+  padding: 0.5rem;
+  background: #0f172a;
+  color: #93c5fd;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  font-size: 10px;
+  line-height: 1.35;
+  max-height: 160px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.cell-chrome-body.cell-output pre {
+  margin: 0;
+  padding: 0.5rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.35;
+  max-height: 160px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.cell-chrome-body.cell-expected pre {
+  margin: 0;
+  padding: 0.5rem;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 6px;
+  font-size: 11px;
+  max-height: 120px;
+  overflow: auto;
+  white-space: pre-wrap;
+  color: #065f46;
+}
+
+.run-btn {
+  padding: 0.35rem 0.75rem;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  border-radius: 6px;
+  background: #2563eb;
+  color: white;
+}
+
+.run-btn:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.run-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.cell-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.35rem 0;
+  align-items: stretch;
+}
+
+.cell-actions .run-btn,
+.cell-actions .delete-btn {
+  width: 100%;
+  white-space: normal;
+  line-height: 1.2;
+  min-height: 2rem;
+}
+
+.delete-btn {
+  padding: 0.35rem 0.5rem;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  background: #fff;
+  color: #b91c1c;
+}
+
+.delete-btn:hover:not(:disabled) {
+  background: #fef2f2;
+}
+
+.delete-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  color: #94a3b8;
+  border-color: #e2e8f0;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.badge-basic {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.badge-secrets {
+  background: #fce7f3;
+  color: #9d174d;
+}
+.badge-limits {
+  background: #ffedd5;
+  color: #c2410c;
+}
+.badge-combo {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+.badge-polling {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.poll-btn {
+  padding: 0.35rem 0.5rem;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid #93c5fd;
+  border-radius: 6px;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.poll-btn:hover:not(:disabled) {
+  background: #dbeafe;
+}
+
+.poll-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  color: #94a3b8;
+  border-color: #e2e8f0;
+  background: #f8fafc;
+}
+
+.cell-actions .poll-btn {
+  width: 100%;
+  white-space: normal;
+  line-height: 1.2;
+  min-height: 2rem;
+}

@@ -1,0 +1,15 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sandboxkit
+  namespace: sandboxes
+  labels:
+    app: sandboxkit
+subjects:
+  - kind: ServiceAccount
+    name: sandboxkit
+    namespace: sandboxes
+roleRef:
+  kind: Role
+  name: sandboxkit
+  apiGroup: rbac.authorization.k8s.io

@@ -1,0 +1,27 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: sandboxkit
+  namespace: sandboxes
+  labels:
+    app: sandboxkit
+rules:
+  # Manage Jobs (create sandbox jobs, read their status, delete after cleanup)
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "watch", "delete"]
+  # Read pod status and logs so we can collect execution results
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+  # Store code snippets as ConfigMaps that are mounted into sandbox pods
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["create", "get", "delete"]
+  # Per-sandbox Secrets for env injection (values from vault, names only in API)
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create", "get", "delete"]

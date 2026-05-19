@@ -1,0 +1,7 @@
+# Optional fallback if kata-deploy does not create a handler named "kata".
+# Prefer RuntimeClasses from kata-deploy: kubectl get runtimeclass
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: kata
+handler: kata

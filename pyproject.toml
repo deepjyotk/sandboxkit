@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling>=1.21.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sandboxkit"
+version = "0.1.0"
+description = "FastAPI sandbox toolkit"
+readme = "README.md"
+requires-python = ">=3.13,<4.0.0"
+authors = [{ name = "Win" }]
+license = { text = "MIT" }
+dependencies = [
+    "fastapi>=0.121.0",
+    "kubernetes>=31",
+    "pydantic-settings>=2.14.1",
+    "uvicorn[standard]>=0.38.0",
+]
+
+[project.scripts]
+sandboxkit = "sandboxkit.main:run"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sandboxkit"]
+
+[dependency-groups]
+dev = [
+    "black>=25.9.0",
+    "flake8>=7.3.0",
+    "flake8-pyproject>=1.2.3",
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py313"]
+
+[tool.flake8]
+max-line-length = 100
+extend-ignore = ["E203", "W503"]
+exclude = [".venv", "build", "dist"]

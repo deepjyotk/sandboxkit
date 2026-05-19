@@ -1,0 +1,31 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sandboxkit
+  namespace: sandboxes
+  labels:
+    app: sandboxkit
+spec:
+  ingressClassName: nginx
+  rules:
+    # Browser / curl to http://sandboxkit.local (add 127.0.0.1 sandboxkit.local to /etc/hosts)
+    - host: sandboxkit.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: sandboxkit
+                port:
+                  number: 8000
+    # http://127.0.0.1 and http://localhost without a custom Host header (kind local dev)
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: sandboxkit
+                port:
+                  number: 8000

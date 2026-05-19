@@ -1,0 +1,30 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.DS_Store
+
+# Secrets & local config — never commit
+.env
+.env.*
+!.env.example
+
+# DigitalOcean / k3s — kubeconfig = full cluster admin access
+digital-ocean/do-k3s.yaml
+digital-ocean/do-k3s.yaml.bak
+digital-ocean/*-k3s.yaml
+digital-ocean/*.kubeconfig
+
+# SSH keys (if ever copied into repo by mistake)
+*.pem
+id_ed25519*
+!id_ed25519*.pub.example
+
+# Local-only scripts (not part of main Makefile flow)
+personal-script/
+personal-scripts/
