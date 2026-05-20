@@ -1,0 +1,20 @@
+{
+  "rewrites": [
+    {
+      "source": "/auth/:path*",
+      "destination": "http://137.184.4.45:30080/auth/:path*"
+    },
+    {
+      "source": "/sandboxes",
+      "destination": "http://137.184.4.45:30080/sandboxes"
+    },
+    {
+      "source": "/sandboxes/:path*",
+      "destination": "http://137.184.4.45:30080/sandboxes/:path*"
+    },
+    {
+      "source": "/health",
+      "destination": "http://137.184.4.45:30080/health"
+    }
+  ]
+}
