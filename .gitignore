@@ -28,3 +28,7 @@ id_ed25519*
 # Local-only scripts (not part of main Makefile flow)
 personal-script/
 personal-scripts/
+
+# Node (ui + docker template images install deps at build time)
+node_modules/
+**/node_modules/

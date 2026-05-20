@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Prebuilt sandbox runtime: Node 22 + axios for user snippets.
+# Prebuilt sandbox runtime: Node 22 + axios + tsx (TypeScript/JavaScript user snippets).
 FROM node:22-slim
 
 WORKDIR /app
@@ -13,7 +13,7 @@ ENV NODE_PATH=/app/node_modules
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# User code is mounted at /sandbox/code.js via ConfigMap
+# User code is mounted at /sandbox/code.ts (or legacy code.js) via ConfigMap
 WORKDIR /sandbox
 
 ENTRYPOINT ["/entrypoint.sh"]

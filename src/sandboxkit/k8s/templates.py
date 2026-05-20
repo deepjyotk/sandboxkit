@@ -16,8 +16,8 @@ def get_sandbox_templates() -> dict[str, dict]:
         },
         "sandbox-js-template": {
             "image": settings.template_js_image,
-            "command": None,  # image ENTRYPOINT runs /sandbox/code.js
-            "file_extension": "js",
+            "command": None,  # image ENTRYPOINT runs /sandbox/code.ts via tsx
+            "file_extension": "ts",
             "memory_limit": "256Mi",
         },
     }

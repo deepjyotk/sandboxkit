@@ -19,9 +19,10 @@ export const TEMPLATES: TemplateOption[] = [
   },
   {
     value: "sandbox-js-template",
-    label: "Node.js",
+    label: "Node.js (TS/JS)",
     lang: "javascript",
-    defaultCode: 'console.log("hello from playground");\n',
+    defaultCode:
+      'const msg: string = "hello from playground";\nconsole.log(msg);\n',
   },
 ];
 
