@@ -47,11 +47,6 @@ export function showLoginModal(): Promise<Identity> {
     title.textContent = "Sign in to SandboxKit";
     card.appendChild(title);
 
-    const subtitle = document.createElement("p");
-    subtitle.className = "auth-modal-sub";
-    subtitle.textContent = "Demo users: deepjyot / Nick — password: Abcd";
-    card.appendChild(subtitle);
-
     const form = document.createElement("form");
     form.className = "auth-modal-form";
 
