@@ -1,13 +1,48 @@
 #!/usr/bin/env bash
 # Run UI test cases (mirrors ui/src/testCases.ts) against the deployed sandboxkit.
-# Assumes:
-#   - KUBECONFIG already exports to the DO cluster
-#   - kubectl port-forward -n sandboxes svc/sandboxkit 8000:8000 is running
+# Defaults to hitting the public DO nginx ingress; override BASE for kind/local.
+#   BASE=http://137.184.4.45:30080  (default — DO ingress, requires login)
+#   BASE=http://127.0.0.1:8000      (port-forward bypasses nginx + auth)
+# Override credentials via SBX_USER / SBX_PASS env vars.
+# (Avoid USERNAME — zsh treats it as a special parameter linked to the OS user.)
 set -uo pipefail
-BASE="${BASE:-http://127.0.0.1:8000}"
+BASE="${BASE:-http://137.184.4.45:30080}"
+SBX_USER="${SBX_USER:-deepjyot}"
+SBX_PASS="${SBX_PASS:-Abcd}"
+COOKIE_JAR="${COOKIE_JAR:-/tmp/sbx-cookie.txt}"
 
 pass=0; fail=0
 declare -a results
+
+# Skip auth entirely when hitting the backend directly (port-forward bypass).
+NEED_AUTH=1
+if [[ "$BASE" == *":8000"* ]]; then
+  NEED_AUTH=0
+fi
+
+if [[ "$NEED_AUTH" == "1" ]]; then
+  echo "== Login as $SBX_USER =="
+  rm -f "$COOKIE_JAR"
+  login_resp=$(curl -s -o /dev/null -w "%{http_code}" \
+    -c "$COOKIE_JAR" \
+    -X POST "$BASE/auth/login" \
+    -H "Content-Type: application/json" \
+    -d "{\"username\":\"$SBX_USER\",\"password\":\"$SBX_PASS\"}")
+  if [[ "$login_resp" != "200" ]]; then
+    echo "FAIL: login returned HTTP $login_resp"
+    exit 1
+  fi
+  echo "  ok (cookie -> $COOKIE_JAR)"
+fi
+
+# Wrap curl so every request carries the cookie (when auth is needed).
+_curl() {
+  if [[ "$NEED_AUTH" == "1" ]]; then
+    curl -b "$COOKIE_JAR" "$@"
+  else
+    curl "$@"
+  fi
+}
 
 _check_resp() {
   # $1 = response body, then a list of substrings (all must match); prefix "!" to negate.
@@ -26,7 +61,7 @@ _check_resp() {
 run_case() {
   local name="$1" body="$2"; shift 2
   local resp http
-  resp=$(curl -s --max-time 90 -w "\n__HTTP__%{http_code}" -X POST "${BASE}/sandboxes" \
+  resp=$(_curl -s --max-time 90 -w "\n__HTTP__%{http_code}" -X POST "${BASE}/sandboxes" \
     -H "Content-Type: application/json" -d "$body")
   http="${resp##*__HTTP__}"
   resp="${resp%__HTTP__*}"
@@ -147,7 +182,7 @@ run_case "combo-secrets-limits" '{
 poll_case() {
   local name="$1" body="$2"; shift 2
   local resp http sid status tries
-  resp=$(curl -s --max-time 30 -w "\n__HTTP__%{http_code}" -X POST "${BASE}/sandboxes" \
+  resp=$(_curl -s --max-time 30 -w "\n__HTTP__%{http_code}" -X POST "${BASE}/sandboxes" \
     -H "Content-Type: application/json" -d "$body")
   http="${resp##*__HTTP__}"; resp="${resp%__HTTP__*}"
   sid=$(echo "$resp" | grep -oE '"sandbox_id":"[^"]*"' | cut -d'"' -f4)
@@ -158,7 +193,7 @@ poll_case() {
   fi
   for tries in $(seq 1 30); do
     sleep 2
-    resp=$(curl -s --max-time 10 "${BASE}/sandboxes/${sid}")
+    resp=$(_curl -s --max-time 10 "${BASE}/sandboxes/${sid}")
     status=$(echo "$resp" | grep -oE '"status":"[^"]*"' | cut -d'"' -f4)
     if [[ "$status" == "completed" || "$status" == "failed" ]]; then break; fi
   done

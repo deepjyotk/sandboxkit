@@ -8,6 +8,7 @@ from fastapi import FastAPI
 
 from sandboxkit import __version__
 from sandboxkit.apis.sandbox_apis import router as sandbox_router
+from sandboxkit.auth.auth_apis import router as auth_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -21,6 +22,7 @@ app = FastAPI(
     version=__version__,
 )
 
+app.include_router(auth_router)
 app.include_router(sandbox_router)
 
 

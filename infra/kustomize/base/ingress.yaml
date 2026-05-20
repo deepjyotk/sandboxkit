@@ -1,28 +1,105 @@
+---
+# Public Ingress: no auth-url. Covers login, health, root, and Swagger docs.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: sandboxkit
+  name: sandboxkit-public
   namespace: sandboxes
   labels:
     app: sandboxkit
 spec:
   ingressClassName: nginx
   rules:
-    # Browser / curl to http://sandboxkit.local (add 127.0.0.1 sandboxkit.local to /etc/hosts)
     - host: sandboxkit.local
       http:
         paths:
-          - path: /
+          - path: /auth
             pathType: Prefix
             backend:
               service:
                 name: sandboxkit
                 port:
                   number: 8000
-    # http://127.0.0.1 and http://localhost without a custom Host header (kind local dev)
+          - path: /health
+            pathType: Prefix
+            backend:
+              service:
+                name: sandboxkit
+                port:
+                  number: 8000
+          - path: /docs
+            pathType: Prefix
+            backend:
+              service:
+                name: sandboxkit
+                port:
+                  number: 8000
+          - path: /openapi.json
+            pathType: Prefix
+            backend:
+              service:
+                name: sandboxkit
+                port:
+                  number: 8000
     - http:
         paths:
-          - path: /
+          - path: /auth
+            pathType: Prefix
+            backend:
+              service:
+                name: sandboxkit
+                port:
+                  number: 8000
+          - path: /health
+            pathType: Prefix
+            backend:
+              service:
+                name: sandboxkit
+                port:
+                  number: 8000
+          - path: /docs
+            pathType: Prefix
+            backend:
+              service:
+                name: sandboxkit
+                port:
+                  number: 8000
+          - path: /openapi.json
+            pathType: Prefix
+            backend:
+              service:
+                name: sandboxkit
+                port:
+                  number: 8000
+---
+# Protected Ingress: nginx calls /auth/validate as a subrequest. On 200 it forwards
+# X-User-Id / X-User-Role to the backend; on 401 it rejects the request.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sandboxkit-protected
+  namespace: sandboxes
+  labels:
+    app: sandboxkit
+  annotations:
+    nginx.ingress.kubernetes.io/auth-url: "http://sandboxkit.sandboxes.svc.cluster.local:8000/auth/validate"
+    nginx.ingress.kubernetes.io/auth-response-headers: "X-User-Id, X-User-Role"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: sandboxkit.local
+      http:
+        paths:
+          - path: /sandboxes
+            pathType: Prefix
+            backend:
+              service:
+                name: sandboxkit
+                port:
+                  number: 8000
+    - http:
+        paths:
+          - path: /sandboxes
             pathType: Prefix
             backend:
               service:

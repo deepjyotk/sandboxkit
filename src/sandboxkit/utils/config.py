@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     sandbox_image_pull_policy: str = "IfNotPresent"
     # Empty = cluster default runtime (runc). Set to "kata" / "kata-qemu" / "kata-fc" on Kata nodes.
     sandbox_runtime_class: str = ""
+    # JWT cookie auth (validated at nginx via /auth/validate subrequest).
+    jwt_secret: str = "dev-secret-change-me"
+    jwt_cookie_name: str = "auth_token"
+    jwt_ttl_seconds: int = 24 * 3600
 
 
 settings = Settings()

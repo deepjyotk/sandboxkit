@@ -16,7 +16,9 @@ import {
   pollSandboxUntilDone,
   parseSandboxIdFromOutput,
   checkHealth,
+  setUnauthorizedHandler,
 } from "./api";
+import { logout, me, showLoginModal, type Identity } from "./auth";
 import { createCopyableCell } from "./cellChrome";
 import { initialRows, type TestCaseRow } from "./testCases";
 
@@ -323,14 +325,16 @@ const columnDefs: ColDef<TestCaseRow>[] = [
   },
 ];
 
-function mountHeader(root: HTMLElement) {
+function mountHeader(root: HTMLElement, identity: Identity) {
   const header = document.createElement("header");
   header.innerHTML = `
     <h1>SandboxKit test runner</h1>
-    <p>Calls ingress via Vite proxy → <code>http://127.0.0.1</code> (wiki hardcoded cases)</p>
+    <p>Calls ingress via Vite proxy (cookie auth flows through nginx).</p>
     <div class="status-bar">
       <span id="health-status">Checking API…</span>
+      <span class="auth-user">Signed in as <strong>${identity.user_id}</strong> (${identity.role})</span>
       <button type="button" class="run-btn" id="run-all">Run all</button>
+      <button type="button" class="delete-btn" id="logout-btn">Logout</button>
     </div>
   `;
   root.appendChild(header);
@@ -349,11 +353,31 @@ async function refreshHealth(el: HTMLElement) {
   el.className = ok ? "ok" : "bad";
 }
 
+async function ensureSignedIn(): Promise<Identity> {
+  const existing = await me();
+  if (existing) return existing;
+  return showLoginModal();
+}
+
 async function main() {
   const root = document.getElementById("app");
   if (!root) return;
 
-  const { gridEl, header } = mountHeader(root);
+  // Gate the whole UI on a valid auth cookie.
+  let identity = await ensureSignedIn();
+
+  // Any later 401 (cookie expired, logged out elsewhere) re-prompts login.
+  setUnauthorizedHandler(() => {
+    void showLoginModal().then((id) => {
+      identity = id;
+      const userEl = document.querySelector(".auth-user");
+      if (userEl) {
+        userEl.innerHTML = `Signed in as <strong>${id.user_id}</strong> (${id.role})`;
+      }
+    });
+  });
+
+  const { gridEl, header } = mountHeader(root, identity);
   const healthEl = header.querySelector("#health-status") as HTMLElement;
   void refreshHealth(healthEl);
 
@@ -381,6 +405,16 @@ async function main() {
       }
       row.running = false;
       gridApi?.applyTransaction({ update: [row] });
+    }
+  });
+
+  header.querySelector("#logout-btn")?.addEventListener("click", async () => {
+    await logout();
+    const next = await showLoginModal();
+    identity = next;
+    const userEl = header.querySelector(".auth-user");
+    if (userEl) {
+      userEl.innerHTML = `Signed in as <strong>${next.user_id}</strong> (${next.role})`;
     }
   });
 }

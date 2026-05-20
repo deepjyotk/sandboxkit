@@ -9,6 +9,18 @@ export type ExecuteResponse = {
   detail?: string | unknown;
 };
 
+/** Listener invoked when any API call returns 401 (auth cookie expired/missing). */
+let onUnauthorized: (() => void) | null = null;
+export function setUnauthorizedHandler(handler: () => void): void {
+  onUnauthorized = handler;
+}
+function notifyIfUnauthorized(status: number): void {
+  if (status === 401 && onUnauthorized) onUnauthorized();
+}
+
+/** All requests include cookies so the auth_token rides every proxied call. */
+const FETCH_OPTS: RequestInit = { credentials: "include" };
+
 export type RunSandboxResult = {
   text: string;
   sandboxId: string | null;
@@ -56,10 +68,12 @@ function sleep(ms: number): Promise<void> {
 
 export async function runSandbox(req: SandboxRequest): Promise<RunSandboxResult> {
   const res = await fetch("/sandboxes", {
+    ...FETCH_OPTS,
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify(req),
   });
+  notifyIfUnauthorized(res.status);
 
   const text = await res.text();
   let body: ExecuteResponse;
@@ -82,8 +96,10 @@ export async function runSandbox(req: SandboxRequest): Promise<RunSandboxResult>
 
 export async function getSandboxStatus(sandboxId: string): Promise<RunSandboxResult> {
   const res = await fetch(`/sandboxes/${encodeURIComponent(sandboxId)}`, {
+    ...FETCH_OPTS,
     headers: { Accept: "application/json" },
   });
+  notifyIfUnauthorized(res.status);
 
   const text = await res.text();
   let body: ExecuteResponse;
@@ -136,9 +152,11 @@ export async function pollSandboxUntilDone(
 
 export async function deleteSandbox(sandboxId: string): Promise<string> {
   const res = await fetch(`/sandboxes/${encodeURIComponent(sandboxId)}`, {
+    ...FETCH_OPTS,
     method: "DELETE",
     headers: { Accept: "application/json" },
   });
+  notifyIfUnauthorized(res.status);
 
   if (res.status === 204) {
     return `HTTP 204 — deleted ${sandboxId}`;
@@ -155,7 +173,7 @@ export async function deleteSandbox(sandboxId: string): Promise<string> {
 
 export async function checkHealth(): Promise<boolean> {
   try {
-    const res = await fetch("/health");
+    const res = await fetch("/health", FETCH_OPTS);
     return res.ok;
   } catch {
     return false;
