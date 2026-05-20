@@ -32,3 +32,7 @@ personal-scripts/
 # Node (ui + docker template images install deps at build time)
 node_modules/
 **/node_modules/
+
+# Standalone demo repos (published to GitHub; nested .git not tracked in monorepo)
+examples/sandboxkit-demo-hello/.git/
+examples/sandboxkit-demo-hello-ts/.git/

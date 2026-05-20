@@ -18,18 +18,38 @@ def get_pod_logs(sandbox_id: str) -> tuple[str, str, int]:
     The kubernetes API does not expose stderr separately from stdout for
     terminated containers; we return the combined log as stdout and derive
     exit code from the container termination state.
+
+    Repo-mode also creates clone/cleanup pods with the same ``sandbox-id``
+    label; we must not pick those when reading the user sandbox — prefer
+    ``sandbox-role=sandbox`` when present, else the pod whose spec defines a
+    ``sandbox`` container.
     """
     core = get_core_v1()
+    ns = settings.sandbox_namespace
+
     pods = core.list_namespaced_pod(
-        namespace=settings.sandbox_namespace,
-        label_selector=f"sandbox-id={sandbox_id}",
+        namespace=ns,
+        label_selector=f"sandbox-id={sandbox_id},sandbox-role=sandbox",
     )
+    if not pods.items:
+        pods = core.list_namespaced_pod(
+            namespace=ns,
+            label_selector=f"sandbox-id={sandbox_id}",
+        )
 
     if not pods.items:
         logger.warning("No pods found for sandbox %s", sandbox_id)
         return "", "No pods found for this sandbox", 1
 
-    pod = pods.items[0]
+    pod = None
+    for p in pods.items:
+        names = [c.name for c in (p.spec.containers or [])]
+        if "sandbox" in names:
+            pod = p
+            break
+    if pod is None:
+        pod = pods.items[0]
+
     pod_name = pod.metadata.name
 
     exit_code = 1
@@ -50,7 +70,7 @@ def get_pod_logs(sandbox_id: str) -> tuple[str, str, int]:
     try:
         stdout_text = core.read_namespaced_pod_log(
             name=pod_name,
-            namespace=settings.sandbox_namespace,
+            namespace=ns,
             container="sandbox",
         )
     except ApiException as exc:

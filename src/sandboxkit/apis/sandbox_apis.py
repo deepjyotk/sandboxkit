@@ -8,7 +8,14 @@ from typing import Any
 from fastapi import APIRouter, Header, HTTPException, Response, status
 
 from sandboxkit import __version__
-from sandboxkit.schemas import ExecuteRequest, ExecuteResponse, SandboxListResponse, SandboxSummary
+from sandboxkit.schemas import (
+    ExecuteRequest,
+    ExecuteResponse,
+    RepoExecuteRequest,
+    SandboxListResponse,
+    SandboxSummary,
+    VmChoice,
+)
 from sandboxkit.services import sandbox_service
 from sandboxkit.utils.exceptions import (
     ResourceLimitError,
@@ -65,6 +72,70 @@ async def create_sandbox(
     )
     try:
         return await sandbox_service.execute(req)
+    except UnknownTemplateError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown sandbox_template '{exc.template_name}'. "
+            f"Available: {exc.available}",
+        ) from exc
+    except UnknownSecretError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown secret name(s): {exc.missing}. Available: {exc.available}",
+        ) from exc
+    except ResourceLimitError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except SandboxResourceError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post(
+    "/sandboxes/from-repo",
+    response_model=ExecuteResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Execute code from a public GitHub repo (virtio-fs hostPath share)",
+)
+async def create_sandbox_from_repo(
+    req: RepoExecuteRequest,
+    response: Response,
+    x_user_id: str | None = Header(default=None),
+    x_user_role: str | None = Header(default=None),
+) -> ExecuteResponse:
+    """
+    Clone a public GitHub repo onto the node's host filesystem and execute
+    the user-specified entrypoint inside a Kata sandbox. The cloned directory
+    is shared into the microVM via **virtio-fs** (transparent on `kata-qemu`
+    when the Pod uses a hostPath volume).
+
+    Lifecycle: `DELETE /sandboxes/{id}` waits for a cleanup Job to remove the
+    per-sandbox host directory before returning 204 — guaranteeing that the
+    code is gone from the node.
+
+    `kata-fc` is accepted but flagged as experimental for repo mode via the
+    `X-VirtioFS-Mode` response header.
+    """
+    logger.info(
+        "create_sandbox_from_repo user_id=%s role=%s vm_choice=%s repo=%s ref=%s entry=%s",
+        x_user_id,
+        x_user_role,
+        req.vm_choice.value,
+        req.github_repo_url,
+        req.git_ref,
+        req.entrypoint,
+    )
+    if req.vm_choice == VmChoice.KATA_FC:
+        response.headers["X-VirtioFS-Mode"] = "experimental-fc"
+    else:
+        response.headers["X-VirtioFS-Mode"] = "kata-qemu"
+
+    try:
+        return await sandbox_service.execute_from_repo(req)
     except UnknownTemplateError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -155,8 +226,15 @@ async def delete_sandbox(
     x_user_role: str | None = Header(default=None),
 ) -> Response:
     """
-    Tear down the sandbox: deletes the Kubernetes Job (cascade-deletes pods),
-    the ConfigMap holding the code, any per-run Secret, and removes in-memory state.
+    Tear down the sandbox.
+
+    - ``actual_code`` sandboxes: deletes the Kubernetes Job (cascade-deletes
+      pods), the ConfigMap holding the code, and any per-run Secret.
+    - ``from-repo`` sandboxes: deletes the Kubernetes Job, runs a synchronous
+      cleanup Job that ``rm -rf``'s the per-sandbox host directory on the
+      node, and only returns 204 after the host bytes are gone.
+
+    In both cases the in-memory record is removed.
     """
     logger.info("delete_sandbox %s user_id=%s role=%s", sandbox_id, x_user_id, x_user_role)
     try:

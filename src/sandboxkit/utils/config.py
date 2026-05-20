@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     jwt_secret: str = "dev-secret-change-me"
     jwt_cookie_name: str = "auth_token"
     jwt_ttl_seconds: int = 24 * 3600
+    # Repo-mode (virtio-fs via hostPath on Kata): per-sandbox host directory and helper images.
+    repo_host_base_path: str = "/var/lib/sandboxkit/repos"
+    clone_image: str = "alpine/git:latest"
+    cleanup_image: str = "busybox:1.36"
+    clone_timeout_seconds: int = 90
+    cleanup_timeout_seconds: int = 60
 
 
 settings = Settings()

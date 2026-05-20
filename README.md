@@ -92,7 +92,8 @@ Production path on the **DigitalOcean droplet** (k3s + Kata on KVM). Local **kin
 ```mermaid
 flowchart TB
   subgraph client["Client (agent, UI, curl)"]
-    C["POST /sandboxes<br/>actual_code + vm_choice"]
+    C1["POST /sandboxes<br/>actual_code + vm_choice"]
+    C2["POST /sandboxes/from-repo<br/>GitHub + entrypoint + vm_choice"]
   end
 
   subgraph droplet["DigitalOcean droplet — k3s single-node cluster"]
@@ -102,6 +103,16 @@ flowchart TB
 
     subgraph cp_ns["namespace: sandboxes — control plane"]
       API["sandboxkit FastAPI<br/>(Deployment, in-cluster)"]
+    end
+
+    subgraph code_paths["How user code reaches the guest (one path per request)"]
+      subgraph path_a["Path A — ConfigMap"]
+        CM["ConfigMap + sandbox Job<br/>snippet at /sandbox/code.py | code.ts"]
+      end
+      subgraph path_b["Path B — virtio-fs (public repo)"]
+        CL["clone Job — git checkout<br/>→ hostPath on node"]
+        SBX["sandbox Job — hostPath volume<br/>→ virtio-fs in guest<br/>read-only /sandbox/repo"]
+      end
     end
 
     subgraph k8s_cp["Kubernetes control plane"]
@@ -120,15 +131,21 @@ flowchart TB
         VMM["VMM<br/>QEMU (kata-qemu) or Firecracker (kata-fc)"]
         KVM["Linux KVM — /dev/kvm<br/>hardware-assisted virtualization"]
         GUEST["Guest microVM<br/>own kernel + minimal init"]
-        OCI["OCI sandbox container<br/>template image + mounted code"]
+        OCI["OCI sandbox container<br/>template + user code:<br/>Path A: ConfigMap @ /sandbox<br/>Path B: virtio-fs @ /sandbox/repo"]
       end
     end
   end
 
-  C --> NG
+  C1 --> NG
+  C2 --> NG
   NG -->|"subrequest validates cookie"| API
   NG -->|"proxied POST"| API
-  API -->|"1. ConfigMap (user code)<br/>2. Job (pod template + limits)"| APIS
+  API -->|"Path A"| CM
+  API -->|"Path B: clone"| CL
+  API -->|"Path B: sandbox Job after clone OK"| SBX
+  CM -->|"persist objects"| APIS
+  CL -->|"persist clone Job"| APIS
+  SBX -->|"persist sandbox Job"| APIS
   APIS --> ETCD
   JC -->|"watch Job → create Pod"| APIS
   SCH -->|"assign Pod → nodeName"| APIS
@@ -140,32 +157,33 @@ flowchart TB
   VMM --> KVM
   KVM --> GUEST
   GUEST --> OCI
-  OCI -->|"entrypoint runs code.py / code.ts"| OCI
   KBL -->|"collect logs"| APIS
   API -->|"poll Job + get pod logs"| APIS
-  API -->|"stdout / stderr / exit_code"| C
+  API -->|"stdout / stderr / exit_code"| C1
+  API -->|"stdout / stderr / exit_code"| C2
 ```
 
-
+Path **B** runs a **clone Job** first (repo on disk under `REPO_HOST_BASE_PATH`), then a **sandbox Job** whose Pod mounts that directory; Kata exposes it inside the microVM as **virtio-fs** at `/sandbox/repo`. Examples: [`wiki/sample-request-from-repo.md`](wiki/sample-request-from-repo.md).
 
 #### Request path (step by step)
 
+**Common steps** (both paths share the same ingress, Kata stack, and log polling after the sandbox Pod exists):
 
 | Step   | Component                     | What happens                                                                                                                                                          |
 | ------ | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **1**  | **Client**                    | `POST /sandboxes` with `actual_code`, `sandbox_template`, optional `vm_choice`, limits, secrets                                                                       |
+| **1**  | **Client**                    | `POST /sandboxes` **or** `POST /sandboxes/from-repo` with template, optional `vm_choice`, limits, secrets                                                            |
 | **2**  | **nginx Ingress**             | Validates JWT via subrequest to FastAPI `/auth/validate`; forwards to control plane on success                                                                        |
-| **3**  | **FastAPI control plane**     | Validates template, resolves secrets, picks RuntimeClass (`kata-qemu` / `kata-fc`), creates **ConfigMap** (code file) + optional **Secret** + **Job** via K8s API     |
-| **4**  | **API server + etcd**         | Persists Job spec (pod template, CPU/mem limits, volume mounts, `runtimeClassName`)                                                                                   |
-| **5**  | **Job controller**            | Sees new Job → creates one **Pod** from `job.spec.template`                                                                                                           |
+| **3**  | **FastAPI control plane**     | **Path A:** creates **ConfigMap** (code file) + optional **Secret** + **sandbox Job**. **Path B:** creates **clone Job** → waits for success → creates **sandbox Job** (hostPath volume, no ConfigMap for code) + optional Secret |
+| **4**  | **API server + etcd**         | Persists Job spec(s) (pod template, CPU/mem limits, volume mounts, `runtimeClassName`)                                                                                |
+| **5**  | **Job controller**            | Sees Job(s) → creates **Pod(s)** from each `job.spec.template` (Path B may run clone Pod then sandbox Pod)                                                             |
 | **6**  | **Scheduler**                 | Binds Pod to a worker node (the droplet itself in the demo)                                                                                                           |
 | **7**  | **kubelet**                   | Sees Pod assigned to its node → calls **containerd** over CRI                                                                                                         |
 | **8**  | **containerd + Kata**         | Reads `runtimeClassName: kata-`* → invokes **kata-runtime** instead of runc                                                                                           |
 | **9**  | **VMM (QEMU or Firecracker)** | Kata asks the VMM to create a **microVM**: tiny guest kernel, virtio devices, sandbox rootfs                                                                          |
 | **10** | **KVM**                       | Host Linux exposes `/dev/kvm`; VMM uses **hardware virtualization** (not slow software emulation) to run the guest CPU                                                |
-| **11** | **Guest microVM**             | Isolated kernel boundary — user code never runs on the host kernel. Template image starts inside the guest; **ConfigMap** is mounted at `/sandbox/code.py` (or `.ts`) |
+| **11** | **Guest microVM**             | Isolated kernel boundary — user code never runs on the host kernel. **Path A:** ConfigMap mounted at `/sandbox/code.py` (or `.ts`). **Path B:** host repo shared by **virtio-fs** at `/sandbox/repo` (read-only) |
 | **12** | **Control plane poll**        | FastAPI polls Job status, reads pod logs from kubelet/API, returns `stdout`, `stderr`, `exit_code` (sync or polling mode)                                             |
-| **13** | **Cleanup**                   | Job `ttlSecondsAfterFinished` (5 min) GCs Pod/Job; `DELETE /sandboxes/{id}` removes Job + ConfigMap + Secret immediately                                              |
+| **13** | **Cleanup**                   | Job `ttlSecondsAfterFinished` (5 min) GCs Pod/Job. **Path A:** `DELETE` removes Job + ConfigMap + Secret. **Path B:** `DELETE` is synchronous: cleanup Job + host dir + sandbox Job (no ConfigMap for code) |
 
 
 #### Isolation stack (why KVM matters)
@@ -185,7 +203,8 @@ flowchart TB
 │  │  │    │ (kata-qemu/fc)   │  │ (next sandbox)   │     │  │  │
 │  │  │    │ guest kernel     │  │ guest kernel     │     │  │  │
 │  │  │    │ └ sandbox pod    │  │ └ sandbox pod    │     │  │  │
-│  │  │    │   code.py/ts     │  │   code.py/ts     │     │  │  │
+│  │  │    │   CM or virtio-fs│  │   CM or virtio-fs│     │  │  │
+│  │  │    │   /sandbox | /repo│  │   /sandbox | /repo│     │  │  │
 │  │  │    └──────────────────┘  └──────────────────┘     │  │  │
 │  │  └─────────────────────────────────────────────────────┘  │  │
 │  └───────────────────────────────────────────────────────────┘  │
@@ -203,15 +222,27 @@ POST /sandboxes
     │
     ├── ConfigMap  code-{sandbox_id}     ← actual_code as code.py / code.ts
     ├── Secret     (optional)            ← SECRET_KEY* env vars
-    └── Job        sandbox-{id}
+    └── Job        {sandbox_id}          ← K8s Job name == sandbox_id
             └── Pod spec
                   ├── runtimeClassName: kata-qemu | kata-fc
                   ├── image: sandboxkit-py-template | sandbox-js-template
                   ├── resources: cpu_limit, memory_limit
                   └── volumes: ConfigMap → /sandbox, emptyDir → /tmp
+
+POST /sandboxes/from-repo
+    │
+    ├── Job        clone-{sandbox_id}    ← git clone into REPO_HOST_BASE_PATH/{id}/…
+    ├── (wait clone Job success)
+    ├── Secret     (optional)
+    └── Job        {sandbox_id}          ← K8s Job name == sandbox_id (after clone succeeds)
+            └── Pod spec
+                  ├── runtimeClassName: kata-qemu | kata-fc
+                  ├── image: sandboxkit-py-template | sandbox-js-template
+                  ├── resources: cpu_limit, memory_limit
+                  └── volumes: hostPath (repo) → /sandbox/repo (virtio-fs in guest, ro), emptyDir → /tmp
+    └── (on DELETE) cleanup Job + remove host dir — synchronous before 204
 ```
 
-Deeper notes: `[doc.md](doc.md)` · VM benchmarks: `[wiki/vm-runtime-comparison.md](wiki/vm-runtime-comparison.md)`
 
 ---
 
@@ -223,9 +254,10 @@ Deeper notes: `[doc.md](doc.md)` · VM benchmarks: `[wiki/vm-runtime-comparison.
 | Resource limits (CPU/mem per sandbox) | ✅           | `cpu_limit`, `memory_limit` on POST; validated + applied to Job          |
 | Basic auth on the API                 | ✅           | JWT cookie auth at nginx ingress (`/auth/login`); protected `/sandboxes` |
 | Filesystem / code upload              | ✅ (minimal) | Code via JSON body → ConfigMap volume mount                              |
+| Run code from GitHub repo (virtio-fs) | ✅           | `POST /sandboxes/from-repo` clones to host, shares to guest via virtio-fs; synchronous cleanup on DELETE |
 | Secret injection                      | ✅           | `secret_names` resolved from vault → K8s Secret → env vars               |
 | VM runtime choice                     | ✅           | `vm_choice`: `kata-qemu` | `kata-fc`                                     |
-| Snapshot / warm sub-second starts     | ❌           | Not implemented — see [What I'd Build Next](#what-id-build-next)         |
+| Snapshot / warm sub-second starts     | ❌           | Not implemented           |
 | Test UI + playground                  | ✅           | Vite UI: test runner grid + CodeMirror playground                        |
 
 
@@ -315,6 +347,44 @@ Key optional fields: `is_polling`, `cpu_limit`, `memory_limit`, `secret_names`, 
 
 ### `DELETE /sandboxes/{id}` — teardown → `204`
 
+For repo sandboxes, `DELETE` is **synchronous**: it only returns 204 after a
+cleanup Job has removed the per-sandbox host directory from the node.
+
+### `POST /sandboxes/from-repo` — run code from a public GitHub repo (virtio-fs)
+
+Clone a public GitHub repo onto the node and run a chosen entrypoint inside a
+Kata sandbox. The repo directory is shared into the microVM via **virtio-fs**
+(transparent on `kata-qemu` when a `hostPath` volume is attached). The
+container logs a `virtio-fs mount probe` line before exec so the demo can show
+the mount type.
+
+```bash
+curl -s -b /tmp/cookie -X POST http://127.0.0.1/sandboxes/from-repo \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sandbox_template": "sandboxkit-py-template",
+    "github_repo_url": "https://github.com/deepjyotk/sandboxkit-demo-hello",
+    "entrypoint": "main.py",
+    "vm_choice": "kata-qemu",
+    "is_polling": false
+  }' | jq
+```
+
+Lifecycle guarantees:
+
+- **Provision:** clone Job (alpine/git, `hostPath`) → sandbox Job
+  (`runtimeClassName: kata-qemu`, `hostPath` mounted read-only at
+  `/sandbox/repo` over virtio-fs).
+- **Delete:** sandbox Job removed → cleanup Job (`busybox` + `rm -rf`) runs and
+  is **awaited synchronously**; 204 only returns after the per-sandbox host
+  directory is gone.
+
+`kata-fc` is allowed but flagged via header `X-VirtioFS-Mode: experimental-fc`
+(Firecracker virtio-fs is less mature than QEMU).
+
+Full examples + validation rules: `[wiki/sample-request-from-repo.md](wiki/sample-request-from-repo.md)`.
+Smoke test: `[digital-ocean/test-from-repo.sh](digital-ocean/test-from-repo.sh)`.
+
 ### Templates
 
 
@@ -325,21 +395,6 @@ Key optional fields: `is_polling`, `cpu_limit`, `memory_limit`, `secret_names`, 
 
 
 Full curl examples: `[wiki/](wiki/)`.
-
----
-
-## What I'd Build Next
-
-Prioritized if this were going to production:
-
-1. **Warm pool / snapshot restore** — sub-second starts; biggest UX win for agents
-2. **Reconciler controller** — guarantee Job/ConfigMap/Secret cleanup; fix crash mid-provision leaks
-3. **Persistent tenant state** — Postgres for sandbox records, quotas, billing
-4. **Network isolation** — default-deny egress; allowlist PyPI/npm/API endpoints per template
-5. **File upload API** — S3/R2 pre-signed URLs → init container before run
-6. **Long-lived sandboxes** — SSH/exec or WebSocket REPL for interactive agents (second interaction model)
-7. **Multi-runtime expansion** — `kata-clh`, gVisor fallback for non-KVM nodes
-8. **Observability** — OpenTelemetry spans per sandbox; SLO on p99 cold start
 
 ---
 
@@ -374,6 +429,10 @@ sandboxkit/
 | `USE_KATA`                                | `True`          | MicroVM RuntimeClass vs runc             |
 | `KATA_RUNTIME_CLASS`                      | `kata-qemu`     | Default RuntimeClass when no `vm_choice` |
 | `TEMPLATE_PY_IMAGE` / `TEMPLATE_JS_IMAGE` | (set by deploy) | Sandbox runtime images                   |
+| `REPO_HOST_BASE_PATH`                     | `/var/lib/sandboxkit/repos` | Node directory holding per-sandbox clones (hostPath / virtio-fs) |
+| `CLONE_IMAGE`                             | `alpine/git:latest` | Image used for the per-sandbox clone Job             |
+| `CLEANUP_IMAGE`                           | `busybox:1.36`  | Image used for the synchronous cleanup Job on DELETE |
+| `CLONE_TIMEOUT_SECONDS` / `CLEANUP_TIMEOUT_SECONDS` | `90` / `60` | Wait deadlines for clone and cleanup Jobs |
 
 
 ---
@@ -393,5 +452,6 @@ Quick pointers for a walkthrough call:
 - **Demo path:** `make setup` → UI test runner → POST from playground with `vm_choice`
 - **Isolation proof:** `[digital-ocean/kata-isolation-probe.sh](digital-ocean/kata-isolation-probe.sh)`
 - **VM tradeoffs:** `[wiki/vm-runtime-comparison.md](wiki/vm-runtime-comparison.md)` — FC slightly faster cold start; QEMU faster in-guest CPU
+- **virtio-fs demo:** `[digital-ocean/test-from-repo.sh](digital-ocean/test-from-repo.sh)` — clones a public GitHub repo, runs entrypoint in a Kata microVM with virtio-fs share, then proves the host dir is gone after DELETE
 - **Surprises:** ConfigMap + Kata FC works on our cluster despite virtio-fs concerns; cold start dominated by microVM boot not user code
 

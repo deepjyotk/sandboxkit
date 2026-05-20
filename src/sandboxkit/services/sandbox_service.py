@@ -17,7 +17,14 @@ from sandboxkit.k8s import (
     get_sandbox_templates,
     wait_for_job,
 )
-from sandboxkit.schemas import ExecuteRequest, ExecuteResponse, SandboxRecord, SandboxStatus
+from sandboxkit.schemas import (
+    ExecuteRequest,
+    ExecuteResponse,
+    RepoExecuteRequest,
+    SandboxRecord,
+    SandboxStatus,
+)
+from sandboxkit.services.repo_sandbox_service import repo_sandbox_service
 from sandboxkit.services.simulate_vault_service import resolve_secret_names
 from sandboxkit.utils.exceptions import (
     ResourceLimitError,
@@ -135,6 +142,39 @@ class SandboxService:
         )
         return cm_name, job_name, secret_name
 
+    async def execute_from_repo(self, req: RepoExecuteRequest) -> ExecuteResponse:
+        """
+        Provision a repo-mode sandbox: clone the GitHub repo onto the host,
+        then run the user's entrypoint inside a Kata microVM with the cloned
+        directory shared into the guest via virtio-fs.
+        """
+        if req.cpu_limit is not None:
+            self._validate_cpu_limit(req.cpu_limit)
+        if req.memory_limit is not None:
+            self._validate_memory_limit(req.memory_limit)
+
+        sandbox_id = self.new_sandbox_id()
+        try:
+            record = await repo_sandbox_service.provision(sandbox_id, req)
+        except (UnknownSecretError, ResourceLimitError, UnknownTemplateError):
+            raise
+        except SandboxResourceError:
+            raise
+        except Exception as exc:
+            logger.exception("Failed to create repo sandbox %s", sandbox_id)
+            raise SandboxResourceError(
+                sandbox_id, f"Could not create repo sandbox: {exc}", cause=exc
+            ) from exc
+
+        self._store[sandbox_id] = record
+
+        if req.is_polling:
+            asyncio.create_task(repo_sandbox_service.wait_and_collect(record))
+            return ExecuteResponse(sandbox_id=sandbox_id, status=SandboxStatus.RUNNING)
+
+        await repo_sandbox_service.wait_and_collect(record)
+        return self.to_response(record)
+
     async def execute(self, req: ExecuteRequest) -> ExecuteResponse:
         """Create sandbox resources and run sync or async (polling) execution."""
         template_name = req.sandbox_template.value
@@ -193,9 +233,21 @@ class SandboxService:
     def delete(self, sandbox_id: str) -> None:
         record = self.get_record(sandbox_id)
         try:
-            delete_sandbox_resources(
-                record.job_name, record.configmap_name, secret_name=record.secret_name
-            )
+            if record.is_repo:
+                # Repo sandboxes: synchronous host-dir cleanup via the orchestrator.
+                repo_sandbox_service.delete(record)
+            else:
+                if record.configmap_name is None:
+                    raise SandboxResourceError(
+                        sandbox_id, "Inconsistent record: missing configmap_name"
+                    )
+                delete_sandbox_resources(
+                    record.job_name,
+                    record.configmap_name,
+                    secret_name=record.secret_name,
+                )
+        except SandboxResourceError:
+            raise
         except Exception as exc:
             logger.exception("Error cleaning up sandbox %s", sandbox_id)
             raise SandboxResourceError(sandbox_id, f"Cleanup failed: {exc}", cause=exc) from exc

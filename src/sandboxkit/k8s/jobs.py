@@ -153,14 +153,18 @@ def create_job(
         metadata=client.V1ObjectMeta(
             name=job_name,
             namespace=settings.sandbox_namespace,
-            labels={"app": "sandboxkit", "sandbox-id": sandbox_id},
+            labels={"app": "sandboxkit", "sandbox-id": sandbox_id, "sandbox-role": "sandbox"},
         ),
         spec=client.V1JobSpec(
             ttl_seconds_after_finished=settings.job_ttl_seconds,
             backoff_limit=0,
             template=client.V1PodTemplateSpec(
                 metadata=client.V1ObjectMeta(
-                    labels={"app": "sandboxkit", "sandbox-id": sandbox_id}
+                    labels={
+                        "app": "sandboxkit",
+                        "sandbox-id": sandbox_id,
+                        "sandbox-role": "sandbox",
+                    }
                 ),
                 spec=client.V1PodSpec(**pod_spec_kwargs),
             ),

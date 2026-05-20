@@ -4,14 +4,25 @@ from sandboxkit.k8s.client import _load_k8s_config, get_batch_v1, get_core_v1
 from sandboxkit.k8s.configmaps import create_code_configmap, delete_configmap
 from sandboxkit.k8s.jobs import create_job, delete_job, delete_sandbox_resources, wait_for_job
 from sandboxkit.k8s.pods import get_pod_logs
+from sandboxkit.k8s.repo_jobs import (
+    create_cleanup_job,
+    create_clone_job,
+    create_repo_sandbox_job,
+    repo_host_dir,
+    wait_for_job_done,
+    wait_for_job_done_sync,
+)
 from sandboxkit.k8s.secrets import create_sandbox_secret, delete_secret
 from sandboxkit.k8s.templates import get_sandbox_templates, list_sandbox_template_names
 
 _load_k8s_config()
 
 __all__ = [
+    "create_cleanup_job",
+    "create_clone_job",
     "create_code_configmap",
     "create_job",
+    "create_repo_sandbox_job",
     "create_sandbox_secret",
     "delete_configmap",
     "delete_job",
@@ -22,5 +33,8 @@ __all__ = [
     "get_pod_logs",
     "get_sandbox_templates",
     "list_sandbox_template_names",
+    "repo_host_dir",
     "wait_for_job",
+    "wait_for_job_done",
+    "wait_for_job_done_sync",
 ]
