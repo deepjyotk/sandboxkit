@@ -2,12 +2,6 @@
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# --- Kata / MicroVM feature flag (hardcoded; flip for DO demo vs kind/local) ---
-# False: sandbox pods use cluster default runtime (runc) — kind/Mac dev.
-# True:  sandbox Jobs set runtimeClassName (Kata microVM on KVM nodes).
-USE_KATA: bool = True
-KATA_RUNTIME_CLASS: str = "kata-qemu"  # matches kata-deploy default install on DO droplet
-
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
@@ -28,7 +22,11 @@ class Settings(BaseSettings):
     template_py_image: str = "sandboxkit-py-template:latest"
     template_js_image: str = "sandbox-js-template:latest"
     sandbox_image_pull_policy: str = "IfNotPresent"
-    # Empty = cluster default runtime (runc). Set to "kata" / "kata-qemu" / "kata-fc" on Kata nodes.
+    # Kata / MicroVM: False = cluster default (runc) on kind/local; True = microVM on KVM nodes.
+    use_kata: bool = True
+    # RuntimeClass when use_kata=True (e.g. kata-qemu, kata-fc, kata-dragonball).
+    kata_runtime_class: str = "kata-qemu"
+    # When use_kata=False, optional override; empty = cluster default runtime (runc).
     sandbox_runtime_class: str = ""
     # JWT cookie auth (validated at nginx via /auth/validate subrequest).
     jwt_secret: str = "dev-secret-change-me"

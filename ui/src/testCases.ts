@@ -4,6 +4,8 @@ export type SandboxRequest = {
   sandbox_template: string;
   actual_code: string;
   is_polling: boolean;
+  /** Kata RuntimeClass: kata-qemu (default) or kata-fc */
+  vm_choice?: "kata-qemu" | "kata-fc";
   secret_names?: string[];
   cpu_limit?: string;
   memory_limit?: string;

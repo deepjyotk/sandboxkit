@@ -405,10 +405,6 @@ sandboxkit pod          sandbox Job pods
 runc                         kata-qemu → QEMU+KVM
 ```
 
-
-
-
-
 ```
 Kubernetes Pod (spec: image, env, runtimeClassName, …)
         ↓
@@ -427,8 +423,6 @@ Yes, in practice you are saying:
 
 > *“For **this** pod, don’t use the default* `runc` *path. Use the* `kata-qemu` *runtime.”*
 
-
-
 ### (`kata-qemu` vs `kata-fc)`
 
 
@@ -441,8 +435,6 @@ Yes, in practice you are saying:
 | Memory overhead          | Higher (~hundreds of MB class with Kata) | Lower                     |
 | “Just works” on DO + k3s | **Usually yes** (why we picked it)       | **Maybe** — needs testing |
 | Nick’s “microVM” ask     | ✅                                        | ✅                         |
-
-
 
 
 ```
@@ -464,8 +456,6 @@ Heavy / different shape
 ```
 
 
-
-
 |                         | **Kata + QEMU (what you did)**              | **firecracker-containerd (no Kata)**                          |
 | ----------------------- | ------------------------------------------- | ------------------------------------------------------------- |
 | **K8s fit**             | Built for K8s (`RuntimeClass`, kata-deploy) | Works via containerd runtime; **more DIY** on each distro/k3s |
@@ -480,5 +470,25 @@ Heavy / different shape
 
 
 
+
+
+
+
+
+|                                                    | **QEMU (**`kata-qemu`**)**                  | **Firecracker (**`kata-fc`**)**             | **Cloud Hypervisor (**`kata-clh`**)** | **Dragonball (**`kata-dragonball`**)**         |
+| -------------------------------------------------- | ------------------------------------------- | ------------------------------------------- | ------------------------------------- | ---------------------------------------------- |
+| **What it is**                                     | Full VM emulator (mature, huge feature set) | Minimal Rust VMM (Lambda-style)             | Modern Rust cloud VMM                 | Rust VMM **built into** Kata’s runtime-rs      |
+| **Typical K8s name**                               | `runtimeClassName: kata-qemu`               | `kata-fc`                                   | `kata-clh`                            | `kata-dragonball`                              |
+| **Your project**                                   | **Yes — what you use on DO**                | Not on your droplet (unless you install it) | Optional                              | Newer default in upstream Kata 3+/4+           |
+| **Isolation**                                      | Strong (guest kernel + KVM)                 | Strong, **smallest** device surface         | Strong + fine-grained seccomp         | Strong, low overhead                           |
+| **Startup**                                        | Slower                                      | Very fast                                   | Very fast                             | **Fastest** (no separate VMM process IPC)      |
+| **RAM/CPU overhead**                               | Medium (~130Mi+ baseline in kata-deploy)    | **Lowest**                                  | Low                                   | **Lowest** (library in-process)                |
+| **virtio-fs** (shared rootfs like your code mount) | Yes                                         | **No**                                      | Yes                                   | Yes                                            |
+| **Device hotplug**                                 | Yes                                         | No                                          | Yes                                   | Yes                                            |
+| **VFIO / GPU passthrough**                         | Yes                                         | No                                          | Yes                                   | Yes                                            |
+| **CPU/memory resize**                              | Yes                                         | No                                          | Yes                                   | Yes                                            |
+| **CRI / K8s feature coverage**                     | **Full**                                    | **Partial** (by design)                     | Full                                  | Full                                           |
+| **Architectures**                                  | x86, ARM, s390, ppc, RISC-V…                | x86, ARM                                    | x86, ARM                              | x86, ARM                                       |
+| **Best for**                                       | “Works everywhere”, passthrough, multi-arch | Serverless, tiny VMs, max minimalism        | Cloud-native, security + resize       | **Default** for density + speed in modern Kata |
 
 

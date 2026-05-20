@@ -28,6 +28,13 @@ class SandboxStatus(str, Enum):
     UNKNOWN = "unknown"
 
 
+class VmChoice(str, Enum):
+    """Kata RuntimeClass for the sandbox microVM (requires use_kata=True on the server)."""
+
+    KATA_QEMU = "kata-qemu"
+    KATA_FC = "kata-fc"
+
+
 class ExecuteRequest(BaseModel):
     sandbox_template: SandboxTemplate = Field(
         ...,
@@ -60,6 +67,13 @@ class ExecuteRequest(BaseModel):
     memory_limit: str | None = Field(
         None,
         description="Memory limit e.g. '64Mi', '1Gi'. Overrides default (256Mi).",
+    )
+    vm_choice: VmChoice = Field(
+        default=VmChoice.KATA_QEMU,
+        description=(
+            "MicroVM runtime for this sandbox: kata-qemu (QEMU, default) or "
+            "kata-fc (Firecracker). Ignored when the server has use_kata=False."
+        ),
     )
 
 

@@ -106,6 +106,7 @@ class SandboxService:
         secret_names: list[str] | None = None,
         cpu_limit: str | None = None,
         memory_limit: str | None = None,
+        runtime_class_override: str | None = None,
     ) -> tuple[str, str, str | None]:
         """
         Provision resources for a sandbox execution.
@@ -130,6 +131,7 @@ class SandboxService:
             secret_keys=secret_keys or None,
             cpu_limit=cpu_limit,
             memory_limit=memory_limit,
+            runtime_class_override=runtime_class_override,
         )
         return cm_name, job_name, secret_name
 
@@ -154,6 +156,7 @@ class SandboxService:
                 secret_names=req.secret_names,
                 cpu_limit=req.cpu_limit,
                 memory_limit=req.memory_limit,
+                runtime_class_override=req.vm_choice.value,
             )
         except (UnknownSecretError, ResourceLimitError):
             raise

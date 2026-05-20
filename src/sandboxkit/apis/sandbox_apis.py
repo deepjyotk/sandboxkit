@@ -57,7 +57,12 @@ async def create_sandbox(
     `X-User-Id` / `X-User-Role` are injected by nginx after validating the auth cookie
     (auth-subrequest pattern); we log them for audit but do not enforce role policy yet.
     """
-    logger.info("create_sandbox user_id=%s role=%s", x_user_id, x_user_role)
+    logger.info(
+        "create_sandbox user_id=%s role=%s vm_choice=%s",
+        x_user_id,
+        x_user_role,
+        req.vm_choice.value,
+    )
     try:
         return await sandbox_service.execute(req)
     except UnknownTemplateError as exc:

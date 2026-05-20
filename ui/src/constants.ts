@@ -29,6 +29,12 @@ export const TEMPLATES: TemplateOption[] = [
 /** Mirrors backend simulate_vault_service.VAULT. Backend has no GET /secrets endpoint. */
 export const SECRETS = ["SECRET_KEY1", "SECRET_KEY2"] as const;
 
+/** Kata RuntimeClass per sandbox (POST /sandboxes `vm_choice`). */
+export const VM_CHOICES: SelectOption[] = [
+  { value: "kata-qemu", label: "kata-qemu (QEMU, default)" },
+  { value: "kata-fc", label: "kata-fc (Firecracker)" },
+];
+
 export type SelectOption = { value: string; label: string };
 
 export const CPU_LIMITS: SelectOption[] = [

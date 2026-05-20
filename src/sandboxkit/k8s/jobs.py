@@ -8,7 +8,7 @@ import logging
 from kubernetes import client  # type: ignore[import-untyped]
 from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
 
-from sandboxkit.utils.config import KATA_RUNTIME_CLASS, USE_KATA, settings
+from sandboxkit.utils.config import settings
 from sandboxkit.k8s.client import get_batch_v1
 from sandboxkit.k8s.configmaps import delete_configmap
 from sandboxkit.k8s.resource_quantities import cap_request_at_limit
@@ -17,6 +17,15 @@ from sandboxkit.k8s.templates import get_sandbox_templates
 from sandboxkit.schemas import SandboxStatus
 
 logger = logging.getLogger(__name__)
+
+
+def resolve_runtime_class(runtime_class_override: str | None = None) -> str | None:
+    """Pick RuntimeClass for a sandbox Job (global use_kata + per-request override)."""
+    if not settings.use_kata:
+        return settings.sandbox_runtime_class or None
+    if runtime_class_override:
+        return runtime_class_override
+    return settings.kata_runtime_class
 
 
 def _secret_env_vars(secret_name: str, secret_keys: list[str]) -> list[client.V1EnvVar]:
@@ -42,6 +51,7 @@ def create_job(
     secret_keys: list[str] | None = None,
     cpu_limit: str | None = None,
     memory_limit: str | None = None,
+    runtime_class_override: str | None = None,
 ) -> str:
     """Create a Kubernetes Job for the given sandbox; returns the Job name."""
     templates = get_sandbox_templates()
@@ -99,11 +109,7 @@ def create_job(
     if secret_name and secret_keys:
         container_kwargs["env"] = _secret_env_vars(secret_name, secret_keys)
 
-    runtime_class = (
-        KATA_RUNTIME_CLASS
-        if USE_KATA
-        else (settings.sandbox_runtime_class or None)
-    )
+    runtime_class = resolve_runtime_class(runtime_class_override)
 
     pod_spec_kwargs: dict = {
         "restart_policy": "Never",
@@ -135,10 +141,10 @@ def create_job(
     if runtime_class:
         pod_spec_kwargs["runtime_class_name"] = runtime_class
         logger.info(
-            "Sandbox Job %s using runtimeClassName=%s (USE_KATA=%s)",
+            "Sandbox Job %s using runtimeClassName=%s (use_kata=%s)",
             job_name,
             runtime_class,
-            USE_KATA,
+            settings.use_kata,
         )
 
     job = client.V1Job(

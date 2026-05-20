@@ -7,6 +7,7 @@ import {
   MEMORY_LIMITS,
   SECRETS,
   TEMPLATES,
+  VM_CHOICES,
   type TemplateOption,
 } from "./constants";
 import type { SandboxRequest } from "./testCases";
@@ -75,6 +76,15 @@ export function renderPlayground(container: HTMLElement): void {
     TEMPLATES[0].value,
   );
   form.appendChild(buildRow("Template", templateSel));
+
+  const vmSel = buildSelect(VM_CHOICES, VM_CHOICES[0].value);
+  form.appendChild(
+    buildRow(
+      "MicroVM",
+      vmSel,
+      "Per-sandbox Kata runtime. kata-fc may not support ConfigMap mounts on all clusters.",
+    ),
+  );
 
   // --- Code editor (CodeMirror) ---
   const editorWrap = document.createElement("div");
@@ -157,6 +167,7 @@ export function renderPlayground(container: HTMLElement): void {
       sandbox_template: templateSel.value,
       actual_code: editor.getValue(),
       is_polling: pollingCb.checked,
+      vm_choice: vmSel.value as "kata-qemu" | "kata-fc",
       ...(selectedSecrets.length ? { secret_names: selectedSecrets } : {}),
       ...(cpuSel.value ? { cpu_limit: cpuSel.value } : {}),
       ...(memSel.value ? { memory_limit: memSel.value } : {}),
