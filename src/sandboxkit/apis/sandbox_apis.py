@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import APIRouter, Header, HTTPException, Response, status
 
 from sandboxkit import __version__
-from sandboxkit.schemas import ExecuteRequest, ExecuteResponse
+from sandboxkit.schemas import ExecuteRequest, ExecuteResponse, SandboxListResponse, SandboxSummary
 from sandboxkit.services import sandbox_service
 from sandboxkit.utils.exceptions import (
     ResourceLimitError,
@@ -81,6 +81,38 @@ async def create_sandbox(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(exc),
         ) from exc
+
+
+@router.get(
+    "/sandboxes",
+    response_model=SandboxListResponse,
+    summary="List all active sandboxes (in-memory store)",
+)
+async def list_sandboxes(
+    x_user_id: str | None = Header(default=None),
+    x_user_role: str | None = Header(default=None),
+) -> SandboxListResponse:
+    """
+    Return all sandboxes currently tracked in memory (created and not yet deleted).
+
+    Note: the store is process-local — a control-plane restart clears it even if
+    Kubernetes Jobs still exist. Entries are removed either by `DELETE /sandboxes/{id}`
+    or when the pod restarts.
+    """
+    logger.info("list_sandboxes user_id=%s role=%s", x_user_id, x_user_role)
+    records = sandbox_service.list_all()
+    return SandboxListResponse(
+        sandboxes=[
+            SandboxSummary(
+                sandbox_id=r.sandbox_id,
+                status=r.status,
+                cpu_limit=r.cpu_limit,
+                memory_limit=r.memory_limit,
+            )
+            for r in records
+        ],
+        total=len(records),
+    )
 
 
 @router.get(

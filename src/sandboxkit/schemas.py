@@ -71,6 +71,22 @@ class ExecuteResponse(BaseModel):
     exit_code: Optional[int] = None
 
 
+class SandboxSummary(BaseModel):
+    """Public summary of a single sandbox (used in GET /sandboxes list)."""
+
+    sandbox_id: str
+    status: SandboxStatus
+    cpu_limit: str | None = None
+    memory_limit: str | None = None
+
+
+class SandboxListResponse(BaseModel):
+    """Response body for GET /sandboxes."""
+
+    sandboxes: list[SandboxSummary]
+    total: int
+
+
 class SandboxRecord(BaseModel):
     """Internal in-memory state for a sandbox execution."""
 

@@ -20,12 +20,19 @@ import {
 } from "./api";
 import { logout, me, showLoginModal, type Identity } from "./auth";
 import { createCopyableCell } from "./cellChrome";
+import { renderPlayground } from "./playground";
+import { currentRoute, navigate, onRouteChange, type Route } from "./router";
 import { initialRows, type TestCaseRow } from "./testCases";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
+// Test-runner state is module-level so re-rendering the route preserves rows + grid identity.
 const rowData = initialRows();
 let gridApi: GridApi<TestCaseRow> | null = null;
+
+// =============================================================================
+// Test runner: cell renderers + column defs (unchanged from previous main.ts)
+// =============================================================================
 
 function textCellRenderer(
   params: ICellRendererParams<TestCaseRow>,
@@ -325,60 +332,30 @@ const columnDefs: ColDef<TestCaseRow>[] = [
   },
 ];
 
-function mountHeader(root: HTMLElement, identity: Identity) {
-  const header = document.createElement("header");
-  header.innerHTML = `
-    <h1>SandboxKit test runner</h1>
-    <p>Calls ingress via Vite proxy (cookie auth flows through nginx).</p>
+function renderTestRunner(page: HTMLElement): void {
+  page.innerHTML = "";
+
+  const wrap = document.createElement("section");
+  wrap.className = "test-runner";
+
+  const intro = document.createElement("div");
+  intro.className = "test-runner-intro";
+  intro.innerHTML = `
     <div class="status-bar">
       <span id="health-status">Checking API…</span>
-      <span class="auth-user">Signed in as <strong>${identity.user_id}</strong> (${identity.role})</span>
       <button type="button" class="run-btn" id="run-all">Run all</button>
-      <button type="button" class="delete-btn" id="logout-btn">Logout</button>
     </div>
   `;
-  root.appendChild(header);
+  wrap.appendChild(intro);
 
   const gridEl = document.createElement("div");
   gridEl.id = "grid";
   gridEl.className = "ag-theme-quartz";
-  root.appendChild(gridEl);
+  wrap.appendChild(gridEl);
 
-  return { gridEl, header };
-}
+  page.appendChild(wrap);
 
-async function refreshHealth(el: HTMLElement) {
-  const ok = await checkHealth();
-  el.textContent = ok ? "API: healthy (/health)" : "API: unreachable — run make infra";
-  el.className = ok ? "ok" : "bad";
-}
-
-async function ensureSignedIn(): Promise<Identity> {
-  const existing = await me();
-  if (existing) return existing;
-  return showLoginModal();
-}
-
-async function main() {
-  const root = document.getElementById("app");
-  if (!root) return;
-
-  // Gate the whole UI on a valid auth cookie.
-  let identity = await ensureSignedIn();
-
-  // Any later 401 (cookie expired, logged out elsewhere) re-prompts login.
-  setUnauthorizedHandler(() => {
-    void showLoginModal().then((id) => {
-      identity = id;
-      const userEl = document.querySelector(".auth-user");
-      if (userEl) {
-        userEl.innerHTML = `Signed in as <strong>${id.user_id}</strong> (${id.role})`;
-      }
-    });
-  });
-
-  const { gridEl, header } = mountHeader(root, identity);
-  const healthEl = header.querySelector("#health-status") as HTMLElement;
+  const healthEl = intro.querySelector("#health-status") as HTMLElement;
   void refreshHealth(healthEl);
 
   gridApi = createGrid(gridEl, {
@@ -389,7 +366,7 @@ async function main() {
     getRowId: (p) => p.data.id,
   });
 
-  header.querySelector("#run-all")?.addEventListener("click", async () => {
+  intro.querySelector("#run-all")?.addEventListener("click", async () => {
     for (const row of rowData) {
       if (row.running || row.deleting) continue;
       row.running = true;
@@ -407,16 +384,107 @@ async function main() {
       gridApi?.applyTransaction({ update: [row] });
     }
   });
+}
+
+// =============================================================================
+// Shared chrome (header + nav tabs + identity + logout) used by both routes
+// =============================================================================
+
+type ChromeHandle = {
+  page: HTMLElement;
+  setIdentity: (id: Identity) => void;
+  highlightRoute: (r: Route) => void;
+};
+
+function mountChrome(root: HTMLElement, identity: Identity): ChromeHandle {
+  const header = document.createElement("header");
+  header.innerHTML = `
+    <h1>SandboxKit</h1>
+    <p>Calls ingress via Vite proxy (cookie auth flows through nginx).</p>
+    <div class="status-bar">
+      <nav class="nav-tabs">
+        <button type="button" class="nav-tab" data-route="test-runner">Test Runner</button>
+        <button type="button" class="nav-tab" data-route="playground">Playground</button>
+      </nav>
+      <span class="auth-user">Signed in as <strong>${identity.user_id}</strong> (${identity.role})</span>
+      <button type="button" class="delete-btn" id="logout-btn">Logout</button>
+    </div>
+  `;
+  root.appendChild(header);
+
+  const page = document.createElement("main");
+  page.id = "page";
+  page.className = "page";
+  root.appendChild(page);
+
+  header.querySelectorAll<HTMLButtonElement>(".nav-tab").forEach((btn) => {
+    btn.addEventListener("click", () => navigate(btn.dataset.route as Route));
+  });
 
   header.querySelector("#logout-btn")?.addEventListener("click", async () => {
     await logout();
     const next = await showLoginModal();
-    identity = next;
+    setIdentity(next);
+  });
+
+  const setIdentity = (id: Identity) => {
     const userEl = header.querySelector(".auth-user");
     if (userEl) {
-      userEl.innerHTML = `Signed in as <strong>${next.user_id}</strong> (${next.role})`;
+      userEl.innerHTML = `Signed in as <strong>${id.user_id}</strong> (${id.role})`;
     }
+  };
+
+  const highlightRoute = (r: Route) => {
+    header.querySelectorAll<HTMLButtonElement>(".nav-tab").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.route === r);
+    });
+  };
+
+  return { page, setIdentity, highlightRoute };
+}
+
+async function refreshHealth(el: HTMLElement) {
+  const ok = await checkHealth();
+  el.textContent = ok ? "API: healthy (/health)" : "API: unreachable — run make infra";
+  el.className = ok ? "ok" : "bad";
+}
+
+async function ensureSignedIn(): Promise<Identity> {
+  const existing = await me();
+  if (existing) return existing;
+  return showLoginModal();
+}
+
+// =============================================================================
+// Boot
+// =============================================================================
+
+async function main() {
+  const root = document.getElementById("app");
+  if (!root) return;
+
+  const identity = await ensureSignedIn();
+
+  root.innerHTML = "";
+  const chrome = mountChrome(root, identity);
+
+  setUnauthorizedHandler(() => {
+    void showLoginModal().then((id) => chrome.setIdentity(id));
   });
+
+  const renderRoute = () => {
+    const r = currentRoute();
+    chrome.highlightRoute(r);
+    if (r === "playground") {
+      gridApi = null;
+      renderPlayground(chrome.page);
+    } else {
+      renderTestRunner(chrome.page);
+    }
+  };
+
+  onRouteChange(renderRoute);
+  renderRoute();
 }
 
 void main();

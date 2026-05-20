@@ -181,6 +181,9 @@ class SandboxService:
         await self._wait_and_collect(record)
         return self.to_response(record)
 
+    def list_all(self) -> list[SandboxRecord]:
+        return list(self._store.values())
+
     def get_status(self, sandbox_id: str) -> ExecuteResponse:
         return self.to_response(self.get_record(sandbox_id))
 

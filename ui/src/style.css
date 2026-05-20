@@ -358,3 +358,158 @@ header p {
   font-size: 12px;
   color: #475569;
 }
+
+/* --- nav tabs --- */
+.nav-tabs {
+  display: inline-flex;
+  gap: 0.25rem;
+  background: #f1f5f9;
+  border-radius: 8px;
+  padding: 0.25rem;
+}
+
+.nav-tab {
+  padding: 0.35rem 0.75rem;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #475569;
+  cursor: pointer;
+}
+
+.nav-tab:hover {
+  color: #0f172a;
+}
+
+.nav-tab.active {
+  background: #ffffff;
+  color: #0f172a;
+  border-color: #cbd5e1;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+/* --- playground page --- */
+.page {
+  display: block;
+}
+
+.playground {
+  max-width: 900px;
+  margin: 1rem auto;
+  padding: 1.25rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.playground-title {
+  margin: 0 0 0.25rem;
+  font-size: 1.15rem;
+  color: #0f172a;
+}
+
+.playground-subtitle {
+  margin: 0 0 1rem;
+  font-size: 12px;
+  color: #475569;
+}
+
+.playground-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.playground-row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  align-items: start;
+  gap: 0.75rem;
+}
+
+.playground-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  padding-top: 0.4rem;
+}
+
+.playground-input {
+  width: 100%;
+  padding: 0.4rem 0.55rem;
+  font-size: 13px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f172a;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.playground-input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.playground-secrets {
+  min-height: 90px;
+}
+
+.playground-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 12px;
+  color: #334155;
+  padding-top: 0.4rem;
+}
+
+.playground-hint {
+  grid-column: 2;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.playground-editor {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  overflow: hidden;
+  min-height: 220px;
+}
+
+.playground-editor .cm-editor {
+  height: 220px;
+}
+
+.playground-editor .cm-editor.cm-focused {
+  outline: none;
+}
+
+.playground-submit {
+  align-self: flex-start;
+  margin-top: 0.25rem;
+  margin-left: 140px;
+  padding: 0.5rem 1rem;
+}
+
+.playground-output {
+  margin: 1rem 0 0;
+  padding: 0.75rem 1rem;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  border-radius: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 360px;
+  overflow: auto;
+}
+
+/* --- test runner intro (reuses status-bar) --- */
+.test-runner-intro {
+  margin-bottom: 0.75rem;
+}
